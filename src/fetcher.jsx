@@ -37,10 +37,7 @@ export function useFetch(url, parser, responseType = ResponseTypes.JSON, { metho
             }
         })();
 
-        return () => {
-            console.log('unmounting');
-            controller.abort();
-        };
+        return () => controller.abort();
     }, [url, parser, method, data, responseType]);
 
     return {
@@ -56,6 +53,12 @@ async function getTypedResponse(response, responseType) {
 }
 
 function getParsedResponse(rawResponse, parser) {
+    if (_.isEmpty(rawResponse)) {
+        return rawResponse;
+    }
+    if (_.isArray(rawResponse)) {
+        return _.map(rawResponse, rawResponseItem => getParsedResponse(rawResponseItem, parser));
+    }
     if (!_.isFunction(parser)) {
         return rawResponse;
     }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import _ from 'lodash';
 
 import Enum from './utils/enum.js';
@@ -12,39 +12,67 @@ const RESPONSE_TYPE_TO_CONVERTER = {
     [ResponseTypes.TEXT]: response => response.text(),
 }
 
-export function useFetch(url, parser, responseType = ResponseTypes.JSON, { method = HTTPMethods.GET, data } = {}) {
+
+export function useFetch(url, parser, responseType = ResponseTypes.JSON,
+    {
+        method = HTTPMethods.GET,
+        data
+    } = {}) {
+
     const [rawResponse, setRawResponse] = useState(null);
     const [error, setError] = useState(null);
-    const [abortRequest, setAbortRequest] = useState(_.noop);
+    const { abortionSignal, abort } = useAbortRequest();
+    const requestBody = JSON.stringify(data);
+
+    const execute = useCallback(async function () {
+        try {
+            const response = await fetch(url, {
+                method: method.description,
+                body: requestBody,
+                signal: abortionSignal,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            const typedResponse = await getTypedResponse(response, responseType);
+            setRawResponse(typedResponse);
+            setError(response.ok ? null : new Error(`server error: ${response.status} - ${response.statusText}`));
+        } catch (exception) {
+            if (isAbortError(exception)) {
+                return;
+            }
+            setError(exception);
+        }
+    }, [url, method, requestBody, responseType])
 
     useEffect(() => {
-        const controller = new AbortController();
-        const signal = controller.signal;
-        setAbortRequest(() => controller.abort.bind(controller));
-
-        (async () => {
-            try {
-                const response = await fetch(url, {
-                    method: method.description,
-                    body: JSON.stringify(data),
-                    signal,
-                });
-                const typedResponse = await getTypedResponse(response, responseType);
-                setRawResponse(typedResponse);
-                setError(response.ok ? null : new Error(`server error: ${response.status} - ${response.statusText}`));
-            } catch (exception) {
-                setError(exception); // TODO: dont do this in case of abortError caused by unmount (if it's caused by user - setError should still be called)
-            }
-        })();
-
-        return () => controller.abort();
-    }, [url, parser, method, data, responseType]);
+        execute();
+    }, [execute]);
 
     return {
         result: getParsedResponse(rawResponse, parser),
         error,
-        abort: abortRequest,
+        abort,
+        execute: execute,
     };
+}
+
+
+function useAbortRequest() {
+    const [controller, setController] = useState(new AbortController());
+    const { signal: abortionSignal } = controller;
+    abortionSignal.addEventListener('abort', () => setController(new AbortController()));
+
+    useEffect(() => controller.abort.bind(controller), [controller]);
+
+    return {
+        abortionSignal,
+        abort: controller.abort.bind(controller),
+    }
+}
+
+function isAbortError(error) {
+    return error instanceof DOMException && error.name === 'AbortError';
 }
 
 async function getTypedResponse(response, responseType) {
@@ -71,4 +99,3 @@ function getParsedResponse(rawResponse, parser) {
         return parser(rawResponse);
     }
 }
-

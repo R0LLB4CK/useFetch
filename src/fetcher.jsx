@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import _ from 'lodash';
 
 import Enum from './utils/enum.js';
+import { useResource } from './useResource.tsx';
 
 
 export const HTTPMethods = new Enum('GET', 'POST');
@@ -12,8 +13,48 @@ const RESPONSE_TYPE_TO_CONVERTER = {
     [ResponseTypes.TEXT]: response => response.text(),
 }
 
-
 export function useFetch(url, parser, responseType = ResponseTypes.JSON,
+    {
+        method = HTTPMethods.GET,
+        data
+    } = {}) {
+
+    const { abortionSignal, abort } = useAbortRequest();
+    const requestBody = JSON.stringify(data);
+
+    const responsePromise = useMemo(() => fetch(url, {
+        method: method.description,
+        body: requestBody,
+        signal: abortionSignal,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    }), [url, method, requestBody])
+
+    const getResource = useCallback(async () => {
+        try {
+            const response = await responsePromise;
+            if (!response.ok) {
+                throw new Error(`server error: ${response.status} - ${response.statusText}`)
+            }
+            const typedResponse = await getTypedResponse(response, responseType);
+            return getParsedResponse(typedResponse, parser);
+        } catch (error) {
+            if (isAbortError(error)) {
+                return;
+            }
+            throw error;
+        }
+    }, [responsePromise, responseType, parser]);
+
+    return useResource(getResource, abort);
+}
+
+
+
+
+
+export function useFetchOld(url, parser, responseType = ResponseTypes.JSON,
     {
         method = HTTPMethods.GET,
         data
@@ -43,14 +84,14 @@ export function useFetch(url, parser, responseType = ResponseTypes.JSON,
             }
             setError(exception);
         }
-    }, [url, method, requestBody, responseType])
+    }, [url, method, requestBody, responseType, abortionSignal])
 
     useEffect(() => {
         execute();
-    }, [execute]);
+    }, [url, method, requestBody, responseType]);
 
     return {
-        result: getParsedResponse(rawResponse, parser),
+        result: getParsedResponse(rawResponse),
         error,
         abort,
         execute: execute,
@@ -63,7 +104,7 @@ function useAbortRequest() {
     const { signal: abortionSignal } = controller;
     abortionSignal.addEventListener('abort', () => setController(new AbortController()));
 
-    useEffect(() => controller.abort.bind(controller), [controller]);
+    useEffect(() => () => controller.abort(), [controller]);
 
     return {
         abortionSignal,
@@ -81,14 +122,11 @@ async function getTypedResponse(response, responseType) {
 }
 
 function getParsedResponse(rawResponse, parser) {
-    if (_.isEmpty(rawResponse)) {
+    if (_.isEmpty(rawResponse) || !_.isFunction(parser)) {
         return rawResponse;
     }
-    if (_.isArray(rawResponse)) {
-        return _.map(rawResponse, rawResponseItem => getParsedResponse(rawResponseItem, parser));
-    }
-    if (!_.isFunction(parser)) {
-        return rawResponse;
+    if (_.isArray(parser)) {
+        return _.map(rawResponse, rawResponseItem => getParsedResponse(rawResponseItem, parser[0]));
     }
     if (_.isFunction(parser.fromJSON)) {
         return parser.fromJSON(rawResponse);

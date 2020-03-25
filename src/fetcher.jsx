@@ -29,7 +29,9 @@ export function useFetch(url, parser, responseType = ResponseTypes.JSON,
         headers: {
             'Content-Type': 'application/json',
         },
-    }), [url, method, requestBody])
+    }), [url, method, requestBody]);
+
+
 
     const getResource = useCallback(async () => {
         try {
@@ -125,8 +127,8 @@ function getParsedResponse(rawResponse, parser) {
     if (_.isEmpty(rawResponse) || !_.isFunction(parser)) {
         return rawResponse;
     }
-    if (_.isArray(parser)) {
-        return _.map(rawResponse, rawResponseItem => getParsedResponse(rawResponseItem, parser[0]));
+    if (_.isArray(rawResponse)) {
+        return _.map(rawResponse, rawResponseItem => getParsedResponse(rawResponseItem, parser));
     }
     if (_.isFunction(parser.fromJSON)) {
         return parser.fromJSON(rawResponse);

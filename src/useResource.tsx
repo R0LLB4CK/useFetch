@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 
 interface Resource<T> {
     result: T;
-    execute: () => Promise<T>;
+    execute: () => void;
     status: ResourceStatus;
     error: Error;
     abort?: () => void;
@@ -21,31 +21,37 @@ export function useResource<T>(getResource: () => Promise<T>, abort?: () => void
     const [result, setResult] = useState<T>(null);
     const [error, setError] = useState<Error>(null);
     const [status, setStatus] = useState<ResourceStatus>(ResourceStatus.Pending);
+    const isAborted = useRef(false);
 
     const updateResult = useCallback(async () => {
         setStatus(ResourceStatus.Sent);
+        console.log('after sent', ResourceStatus[status])
         try {
             const resource = await getResource();
-            if (status === ResourceStatus.Aborted) {
+            if (isAborted.current) {
                 return;
             }
             setResult(resource);
             setStatus(ResourceStatus.Success);
+            console.log('after success', ResourceStatus[status])
         } catch (error) {
             setError(error);
             setStatus(ResourceStatus.Error);
+            console.log('after error', ResourceStatus[status])
         }
     }, [getResource])
 
-    useEffect(() => {
-        updateResult();
-        return abort;
-    }, [updateResult]);
-
     const _abort = useCallback(() => {
         setStatus(ResourceStatus.Aborted);
+        // isAborted.current = true;
+        console.log('after abort', ResourceStatus[status])
         abort();
     }, [abort]);
 
-    return { result, status, error, abort: _abort, execute: getResource };
+    useEffect(() => {
+        updateResult();
+        return _abort;
+    }, [updateResult]);
+
+    return { result, status, error, abort: _abort, execute: updateResult };
 }

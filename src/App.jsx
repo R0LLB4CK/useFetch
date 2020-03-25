@@ -36,14 +36,15 @@ function FetchTesterDataTest() {
 function FetcherTest() {
   const { result: users, error, abort, execute, renew } = useFetch('http://localhost/users', User);
   const { result: users1, error: error1, abort: abort1, execute: execute1, renew: renew1 } = useFetch('http://localhost/users', User);
+  console.log(users)
   return (
     <div>
-      {JSON.stringify(users)}
+      {JSON.stringify(users)}-
       {error?.message}
       <button onClick={abort}>abort</button>
       <button onClick={execute}>execute</button>
       <br /><br />
-      {JSON.stringify(users1)}
+      {JSON.stringify(users1)}-
       {error1?.message}
       <button onClick={abort1}>abort</button>
       <button onClick={execute1}>execute</button>

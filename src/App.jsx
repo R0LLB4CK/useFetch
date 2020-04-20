@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import './App.css';
-import { useFetch, HTTPMethods } from './fetcher.jsx';
-import { useResource } from './useResource.tsx';
+import { useFetch, HTTPMethods } from './fetcher';
+import { useResource } from './useResource';
 
 class User {
   constructor({ name, age }) {
@@ -34,11 +34,13 @@ function FetchTesterDataTest() {
 }
 
 function FetcherTest() {
-  const { result: users, error, abort, execute, renew } = useFetch('http://localhost/users', User);
+  const things = useFetch('http://localhost/users', User);
+  const { result: users, error, abort, execute, renew } = things;
   const { result: users1, error: error1, abort: abort1, execute: execute1, renew: renew1 } = useFetch('http://localhost/users', User);
   console.log(users)
   return (
     <div>
+      {JSON.stringify(things)}---
       {JSON.stringify(users)}-
       {error?.message}
       <button onClick={abort}>abort</button>
